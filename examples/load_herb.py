@@ -2,6 +2,8 @@ import dartpy
 import numpy
 import time
 import dart_tourist
+from collections import deque
+import json
 
 # Create the environment.
 PACKAGE_NAME = 'WAM_URDF'
@@ -21,63 +23,66 @@ world = dartpy.World()
 tempo = world.add_skeleton(skel)
 robot = world.get_skeleton_by_name(tempo)
 
-# not-quite-correct json syntax but it suffices for demonstration
+# builds up a python data structure
 class MyVisitor:
     def __init__(self):
-        self.indent = 0
-        self.inmesh = False
-        self.curskels = 0
-        self.curbodies = 0
-        self.curattributes = 0
-        self.message = ""
+        self.data = {}
+        self.stack = deque()
+        self.stack.append(self.data)
 
-    def newline(self, addcomma = False):
-        if addcomma:
-            self.message += ",\n"
-        else:
-            self.message += "\n"
-
-    def append(self, msg):
-        self.message += (" " * self.indent + msg)
+    def append(self, propname, propval):
+        self.stack[-1][propname] = propval
 
     def pose4q3t(self, qx, qy, qz, qw, tx, ty, tz):
-        self.newline(self.curattributes > 0)
-        self.append('"rot": [{},{},{},{}],\n'.format(qx, qy, qz, qw))
-        self.append('"trans": [{},{},{}]'.format(tx, ty, tz))
-        self.curattributes += 1
+        self.append("rot", (qx, qy, qz, qw))
+        self.append("trans", (tx, ty, tz))
 
     def scale3(self, sx, sy, sz):
-        self.newline(self.curattributes > 0)
-        self.append('"scale": [{},{},{}]'.format(sx, sy, sz))
-        self.curattributes += 1
+        self.append("scale", (sx, sy, sz))
 
     def enter_mesh(self, meshname):
-        self.newline(self.curattributes > 0)
-        self.append('"mesh":"{}"'.format(meshname))
-        self.inmesh = True
-        self.curattributes += 1
+        curthing = {"filename": meshname}
+        self.stack[-1]["nmeshes"] += 1
+        self.stack[-1]["mesh.{}".format(self.stack[-1]["nmeshes"])] = curthing
+        self.stack.append(curthing)
 
     def enter_body(self, bodyname):
-        self.newline(self.curbodies > 0)
-        self.append('"body.{}":{{'.format(bodyname))
-        self.indent += 4
-        self.curattributes = 0
-        self.curbodies += 1
+        curthing = {"nmeshes": 0}
+        self.stack[-1]["body." + bodyname] = curthing
+        self.stack.append(curthing)
 
     def enter_skeleton(self, skelname):
-        self.append('"skeleton.{}":{{'.format(skelname))
-        self.indent += 4
-        self.curbodies = 0
+        curthing = {}
+        self.stack[-1]["skeleton." + skelname] = curthing
+        self.stack.append(curthing)
 
     def leave(self):
-        if not self.inmesh:
-            self.newline(False)
-            self.indent -= 4
-            self.append("}")
-        else:
-            self.inmesh = False
-        if self.indent <= 0:
-            print(self.message)
+        self.stack.pop()
 
+    def toJSON(self, pretty=False):
+        if not pretty:
+            return json.dumps(self.data)
+        else:
+            return json.dumps(self.data, indent=1)
+
+visitor = MyVisitor()
 skelvisitor = dart_tourist.SkeletonVisitor("Skeletor")
-skelvisitor.visit_skeleton(robot, MyVisitor())
+skelvisitor.visit_skeleton(robot, visitor)
+print(visitor.toJSON(pretty = True))
+
+import time
+
+temp = []
+starttime = time.time()
+for i in range(1000):
+    visitor = MyVisitor()
+    skelvisitor.visit_skeleton(robot, visitor)
+    temp.append(visitor.toJSON())
+endtime = time.time()
+
+# because we do 1000 runs, the time per run in ms is just the total time in s
+# (i.e., dt (s) / 1000 (runs) * 1000 (ms/s) = dt (ms/run))
+print("Avg. time for serialization: {} ms".format(endtime - starttime))
+nbytes = len(temp[0])
+print("Serialized size: {} bytes".format(nbytes))
+print("Est. bandwidth @30hz: {} kb/s".format(nbytes * 30 / 1000.0))
