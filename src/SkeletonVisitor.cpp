@@ -37,36 +37,37 @@ bool isUnitScaling(Eigen::Vector3d const &s) {
   return s[0] == 1.0 && s[1] == 1.0 && s[2] == 1.0;
 }
 
-void visitPose(Eigen::Isometry3d const &transform, boost::python::object &visitor) 
+void visitPose(Eigen::Isometry3d const &transform, Visitor* visitor) 
 {
   Eigen::Quaterniond const q(transform.rotation());
   Eigen::Vector3d const t(transform.translation());
 
   if(!isIdentity(q, t)) {
-    visitor.attr("pose4q3t")(q.x(), q.y(), q.z(), q.w(),
+    visitor->pose4q3t(q.x(), q.y(), q.z(), q.w(),
                              t[0], t[1], t[2]);
   }
 }
 
-void visitScale(Eigen::Vector3d const &s, boost::python::object &visitor)
+void visitScale(Eigen::Vector3d const &s, Visitor* visitor)
 {
   if(!isUnitScaling(s)) {
-    visitor.attr("scale3")(s[0], s[1], s[2]);
+    visitor->scale3(s[0], s[1], s[2]);
   }
 }
 
-void visitMesh(MeshShape const &mesh, boost::python::object &visitor)
+void visitMesh(MeshShape const &mesh, Visitor* visitor)
 {
   std::string const &scenePath = mesh.getMeshPath();
-  visitor.attr("enter_mesh")(scenePath);
+  visitor->enter("mesh", ""); // should have names??
+  visitor->filename(scenePath);
 
   visitPose(mesh.getLocalTransform(), visitor);
   visitScale(mesh.getScale(), visitor);
 
-  visitor.attr("leave")(); // leave mesh
+  visitor->leave("mesh"); // leave mesh
 }
 
-void visitShape(Shape const &shape, boost::python::object &visitor)
+void visitShape(Shape const &shape, Visitor* visitor)
 {
   switch (shape.getShapeType()) {
   case Shape::BOX:
@@ -86,15 +87,22 @@ void visitShape(Shape const &shape, boost::python::object &visitor)
   }
 }
 
+void SkeletonVisitor::pyVisitSkeleton(SkeletonPtr const &skeleton,
+                                      boost::python::object visitor)
+{
+  PyVisitor wrappedVisitor(visitor);
+  visitSkeleton(&wrappedVisitor);
+}
+
 void SkeletonVisitor::visitSkeleton(SkeletonPtr const &skeleton, 
-                                  boost::python::object visitor)
+                                  Visitor* visitor)
 {
   // indicate that a skeleton has happened
-  visitor.attr("enter_skeleton")(skeleton->getName());
+  visitor->enter("skeleton", skeleton->getName());
 
   for (BodyNode *const bodyNode : skeleton->getBodyNodes()) {
     // indicate that a new body has happened
-    visitor.attr("enter_body")(bodyNode->getName());
+    visitor->enter("body", bodyNode->getName());
 
     // body pose
     Eigen::Isometry3d const &Tworld_bodynode = bodyNode->getWorldTransform();
@@ -107,9 +115,9 @@ void SkeletonVisitor::visitSkeleton(SkeletonPtr const &skeleton,
     }
 
     // leave body
-    visitor.attr("leave")();
+    visitor->leave("body");
   }
 
   // leave skeleton
-  visitor.attr("leave")();
+  visitor->leave("skeleton");
 }
