@@ -50,7 +50,7 @@ skelvisitor.visit_skeleton(robot, visitor)
 print(visitor.toJSON(pretty = True))
 ```
 
-Will produce serialize the skeleton into a plain python structure, which can
+The above visitor will serialize the skeleton into a plain python structure, which can
 then be converted to JSON:
 ```
 {
@@ -80,7 +80,9 @@ then be converted to JSON:
   }, [...]
 ```
 
-Performance is reasonably good, for the seven-link WAM urdf:
+Performance is reasonably good, for the seven-link WAM urdf (in a virtual machine):
+```
 Avg. time for serialization: 0.0999028682709 ms
 Serialized size: 1597 bytes
 Est. bandwidth @30hz: 47.91 kb/s
+```
