@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<title>mesh test</title>
+		<meta charset="utf-8">
+		<style>
+			body {
+				margin: 0px;
+				background-color: #000000;
+				overflow: hidden;
+			}
+		</style>
+	</head>
+	<body>
+
+		<script src="//code.jquery.com/jquery-1.11.3.min.js"></script>
+
+		<script>
+
+			var connection = null;
+			var opened = false;
+
+			$(function(){
+				init_ws();
+			});
+
+			function init_ws() {
+				connection = new WebSocket("ws://localhost:9000");
+				connection.onopen = function(event) {
+					console.log("Opened connection!");
+					opened = true;
+				};
+
+				connection.onmessage = function(event) {
+					//console.log(event.data);
+					var jdata = JSON.parse(event.data);
+					console.log(jdata);
+				};
+
+				window.setInterval(ping_data, 500);
+			}
+
+			function ping_data() {
+				if(connection && opened) {
+					connection.send("ping");
+				}
+			}
+
+		</script>
+
+	</body>
+</html>
